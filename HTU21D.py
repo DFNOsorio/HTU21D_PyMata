@@ -41,8 +41,7 @@ class HTU21D(object):
 		self.config = True
 
 	def data_val(self, data):
-		print data
-		self.callback = data
+		self.callback = data[2]
 
 	def read_user_registry(self):
 		if self.config:
@@ -51,20 +50,24 @@ class HTU21D(object):
 		else:
 			print "Not configured"
 
-	def change_resolution(self, resolution = self.HTU21DR_register["USER_REGISTER_RESOLUTION_RH12_TEMP14"]):
+	def change_resolution(self, resolution):
+
 		if self.config:
+			self.callback = []
 			self.read_user_registry()
-			user_registry = self.callback[0]
+			while len(self.callback) <= 1:
+				True
+			if self.board.verbose:
+				print "Resolution Read"
+			user_registry = self.callback[1]
 			user_registry = user_registry & 126 # Turn off the resolution bits
-			resolution   = resolution & 129 # Turn off the other bits but resolution (7 and 1)
+			resolution    = resolution & 129 # Turn off the other bits but resolution (7 and 1)
 
-			user_registry = user_registy|resolution
-
-			print "NEW USER REGISTRY" , user_registry
+			user_registry = user_registry|resolution
 
 			# board.i2c_write(self.address, user_registry)
-			board.i2c_write(self.address, [self.HTU21DR_register["WRITE_USER_REG"], user_registry])
-
+			self.board.i2c_write(self.address, self.HTU21DR_register["WRITE_USER_REG"], user_registry)
+			time.sleep(0.03)
 			self.read_user_registry()
 		else:
 			print "Not configured"
@@ -74,20 +77,21 @@ class HTU21D(object):
 			self.callback = []
 			if hold:
 				register = self.HTU21DR_register["TRIGGER_TEMP_MEASURE_HOLD"]
-			else
+			else:
 				register = self.HTU21DR_register["TRIGGER_TEMP_MEASURE_NOHOLD"]
 
 			self.board.i2c_read(self.address, register, 3, self.board.I2C_READ, self.data_val)
 
-			print "Waiting for data"
 			while len(self.callback)<=2:
 				True
-			print "Data available"
+
+			if self.board.verbose:
+				print "Temperature Read"
 
 			if not self.CRC():
 				return 999
 
-			raw_temp = (self.callback[0] << 8) + self.callback[1]
+			raw_temp = (self.callback[1] << 8) + self.callback[2]
 
 			raw_temp = raw_temp & 0xFFFC #Clear status bits
 			actual_temp = -46.85 + (175.72 * raw_temp / 65536.0)
@@ -103,20 +107,21 @@ class HTU21D(object):
 		
 			if hold:
 				register = self.HTU21DR_register["TRIGGER_HUMD_MEASURE_HOLD"]
-			else
+			else:
 				register = self.HTU21DR_register["TRIGGER_HUMD_MEASURE_NOHOLD"]
 
 			self.board.i2c_read(self.address, register, 3, self.board.I2C_READ, self.data_val)
 
-			print "Waiting for data"
 			while len(self.callback)<=2:
 				True
-			print "Data available"
-			
+
+			if self.board.verbose:
+				print "Humidity Read"
+
 			if not self.CRC():
 				return 999
 
-			raw_hum = (self.callback[0] << 8) + self.callback[1]
+			raw_hum = (self.callback[1] << 8) + self.callback[2]
 
 			raw_hum = raw_hum & 0xFFFC #Clear status bits
 			actual_hum = -6 + (125.0 * raw_hum / 65536.0)
@@ -127,9 +132,9 @@ class HTU21D(object):
 			return 998
 
 	def CRC(self):
-		remainder = ((self.callback[0] << 8) + self.callback[1]) << 8
+		remainder = ((self.callback[1] << 8) + self.callback[2]) << 8
 
-		remainder = remainder | self.callback[2]
+		remainder = remainder | self.callback[3]
 
 		divsor = 0x988000
 
